@@ -3,70 +3,51 @@ import { DeployFunction } from "hardhat-deploy/types";
 import { DEX } from "../typechain-types/contracts/DEX";
 import { Balloons } from "../typechain-types/contracts/Balloons";
 
-/**
- * Deploys a contract named "YourContract" using the deployer account and
- * constructor arguments set to the deployer address
- *
- * @param hre HardhatRuntimeEnvironment object.
- */
 const deployYourContract: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
-  /*
-    On localhost, the deployer account is the one that comes with Hardhat, which is already funded.
-
-    When deploying to live networks (e.g `yarn deploy --network sepolia`), the deployer account
-    should have sufficient balance to pay for the gas fees for contract creation.
-
-    You can generate a random account with `yarn generate` which will fill DEPLOYER_PRIVATE_KEY
-    with a random private key in the .env file (then used on hardhat.config.ts)
-    You can run the `yarn account` command to check your balance in every network.
-  */
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
+  // 1. Deploy Balloons Token
   await deploy("Balloons", {
     from: deployer,
-    // Contract constructor arguments
-    //args: [deployer],
     log: true,
-    // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
-    // automatically mining the contract deployment transaction. There is no effect on live networks.
     autoMine: true,
   });
-  // Get the deployed contract
-  // const yourContract = await hre.ethers.getContract("YourContract", deployer);
+
   const balloons: Balloons = await hre.ethers.getContract("Balloons", deployer);
   const balloonsAddress = await balloons.getAddress();
 
+  // 2. Deploy DEX
   await deploy("DEX", {
     from: deployer,
-    // Contract constructor arguments
     args: [balloonsAddress],
     log: true,
-    // autoMine: can be passed to the deploy function to make the deployment process faster on local networks by
-    // automatically mining the contract deployment transaction. There is no effect on live networks.
     autoMine: true,
   });
 
   const dex = (await hre.ethers.getContract("DEX", deployer)) as DEX;
+  const dexAddress = await dex.getAddress();
 
-  // // paste in your front-end address here to get 10 balloons on deploy:
-  // await balloons.transfer("YOUR_FRONTEND_ADDRESS", "" + 10 * 10 ** 18);
+  // 3. Transfer Balloons to your Frontend address for testing
+  // REPLACE "YOUR_FRONTEND_ADDRESS" with your actual wallet address (e.g., from Metamask)
+  const frontendAddress = "0x8A5d6a69D94a13354A923f6C64e6B08081059fb6";
 
-  // // uncomment to init DEX on deploy:
+  // if (frontendAddress !== "0x8A5d6a69D94a13354A923f6C64e6B08081059fb6") {
+  //   console.log(`\n Sending 10 Balloons to frontend address: ${frontendAddress}...`);
+  //   await balloons.transfer(frontendAddress, hre.ethers.parseEther("10"));
+  // }
 
-  // const dexAddress = await dex.getAddress();
-  // console.log("Approving DEX (" + dexAddress + ") to take Balloons from main account...");
-  // // If you are going to the testnet make sure your deployer account has enough ETH
-  // await balloons.approve(dexAddress, hre.ethers.parseEther("100"));
-  // console.log("INIT exchange...");
-  // await dex.init(hre.ethers.parseEther("5"), {
-  //   value: hre.ethers.parseEther("5"),
-  //   gasLimit: 200000,
-  // });
+  // 4. Initialize the DEX Pool
+  // This provides 5 ETH and 5 Balloons to start the x*y=k curve
+  console.log("\n Approving DEX to take Balloons from deployer...");
+  await balloons.approve(dexAddress, hre.ethers.parseEther("100"));
+  
+  console.log(" INIT exchange with 0.005 ETH and 0.005 Balloons...");
+  await dex.init(hre.ethers.parseEther("0.005"), {
+    value: hre.ethers.parseEther("0.005"),
+    gasLimit: 200000,
+  });
 };
 
 export default deployYourContract;
-
-// Tags are useful if you have multiple deploy files and only want to run one of them.
-// e.g. yarn deploy --tags YourContract
 deployYourContract.tags = ["Balloons", "DEX"];
